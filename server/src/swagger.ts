@@ -126,7 +126,10 @@ Backend per la gestione di un registro elettronico scolastico.
           id: { type: "integer" },
           name: { type: "string" },
           description: { type: "string", nullable: true },
-          permissions: { type: "array", items: { type: "string" } },
+          permissions: {
+            type: "array",
+            items: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" } } },
+          },
         },
       },
       CreateRoleInput: {
@@ -137,8 +140,9 @@ Backend per la gestione di un registro elettronico scolastico.
           description: { type: "string", example: "Segreteria didattica", nullable: true },
           permissions: {
             type: "array",
-            items: { type: "string" },
-            example: ["classes:read", "users:read"],
+            items: { type: "integer" },
+            example: [1, 2, 3],
+            description: "IDs dei permessi",
           },
         },
       },
@@ -270,6 +274,66 @@ Backend per la gestione di un registro elettronico scolastico.
         type: "object",
         properties: {
           message: { type: "string", example: "Operazione completata" },
+        },
+      },
+      Permission: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          name: { type: "string" },
+          description: { type: "string", nullable: true },
+        },
+      },
+      UserRole: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          name: { type: "string" },
+          description: { type: "string", nullable: true },
+        },
+      },
+      SetUserRolesInput: {
+        type: "object",
+        required: ["roles"],
+        properties: {
+          roles: { type: "array", items: { type: "string" }, example: ["student", "teacher"] },
+        },
+      },
+      AddUserRoleInput: {
+        type: "object",
+        required: ["role"],
+        properties: {
+          role: { type: "string", example: "student" },
+        },
+      },
+      AddRolePermissionInput: {
+        type: "object",
+        required: ["permissionId"],
+        properties: {
+          permissionId: { type: "integer", example: 1 },
+        },
+      },
+      TeacherClass: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          name: { type: "string" },
+          school_year_id: { type: "integer" },
+          school_year_name: { type: "string" },
+          subject_name: { type: "string" },
+          subject_id: { type: "integer" },
+          students: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "integer" },
+                first_name: { type: "string" },
+                last_name: { type: "string" },
+                username: { type: "string" },
+              },
+            },
+          },
         },
       },
     },
@@ -645,7 +709,7 @@ Backend per la gestione di un registro elettronico scolastico.
       get: {
         tags: ["Grades"],
         summary: "Miei voti",
-        description: "Dispatcher automatico in base al ruolo: studente → propri voti, insegnante → voti inseriti, admin → tutti i voti.",
+        description: "Dispatcher automatico in base al ruolo: studente → propri voti, insegnante → voti inseriti, admin/principal → array vuoto.",
         security: [{ BearerAuth: [] }],
         responses: { 200: { description: "Voti (in base al ruolo)", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Grade" } } } } } },
       },
@@ -719,6 +783,119 @@ Backend per la gestione di un registro elettronico scolastico.
         summary: "Elenco permessi (admin)",
         security: [{ BearerAuth: [] }],
         responses: { 200: { description: "Lista permessi", content: { "application/json": { schema: { type: "array", items: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" }, description: { type: "string" } } } } } } } },
+      },
+    },
+
+    // ─── User Roles ───────────────────────────────
+    "/api/auth/users/{id}/roles": {
+      get: {
+        tags: ["Users — Roles"],
+        summary: "Ruoli di un utente",
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: { 200: { description: "Lista ruoli", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/UserRole" } } } } } },
+      },
+      put: {
+        tags: ["Users — Roles"],
+        summary: "Sostituisci tutti i ruoli (admin/principal)",
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/SetUserRolesInput" } } } },
+        responses: { 200: { description: "Ruoli aggiornati", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/UserRole" } } } } } },
+      },
+      post: {
+        tags: ["Users — Roles"],
+        summary: "Aggiungi ruolo a utente (admin/principal)",
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/AddUserRoleInput" } } } },
+        responses: { 200: { description: "Ruolo aggiunto", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/UserRole" } } } } } },
+      },
+      delete: {
+        tags: ["Users — Roles"],
+        summary: "Rimuovi ruolo da utente (admin/principal)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "integer" } },
+          { name: "role", in: "path", required: true, schema: { type: "string" }, description: "Nome del ruolo" }
+        ],
+        responses: { 200: { description: "Ruolo rimosso", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/UserRole" } } } } } },
+      },
+    },
+
+    // ─── User Permissions ─────────────────────────
+    "/api/auth/users/{id}/permissions": {
+      get: {
+        tags: ["Users — Permissions"],
+        summary: "Permessi effettivi di un utente (computed)",
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: { 200: { description: "Lista permessi", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Permission" } } } } } },
+      },
+    },
+
+    // ─── Role Permissions (granular) ──────────────
+    "/api/roles/{id}/permissions": {
+      get: {
+        tags: ["Roles — Permissions"],
+        summary: "Permessi di un ruolo",
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: { 200: { description: "Lista permessi", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Permission" } } } } } },
+      },
+      post: {
+        tags: ["Roles — Permissions"],
+        summary: "Aggiungi permesso a ruolo (admin)",
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/AddRolePermissionInput" } } } },
+        responses: { 200: { description: "Permesso aggiunto", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Permission" } } } } } },
+      },
+      delete: {
+        tags: ["Roles — Permissions"],
+        summary: "Rimuovi permesso da ruolo (admin)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "integer" } },
+          { name: "permissionId", in: "path", required: true, schema: { type: "integer" } }
+        ],
+        responses: { 200: { description: "Permesso rimosso", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Permission" } } } } } },
+      },
+    },
+
+    // ─── Teacher Classes ──────────────────────────
+    "/api/classes/teacher/me": {
+      get: {
+        tags: ["Classes — Teacher"],
+        summary: "Classi dell'insegnante autenticato",
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: "Lista classi con materia", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/TeacherClass" } } } } } },
+      },
+    },
+    "/api/classes/teacher/me/with-students": {
+      get: {
+        tags: ["Classes — Teacher"],
+        summary: "Classi dell'insegnante con studenti iscritti",
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: "Lista classi con studenti", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/TeacherClass" } } } } } },
+      },
+    },
+    "/api/classes/teachers/{id}/classes": {
+      get: {
+        tags: ["Classes — Teacher"],
+        summary: "Classi di un insegnante specifico (admin/principal)",
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" }, description: "ID insegnante" }],
+        responses: { 200: { description: "Lista classi con materia", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/TeacherClass" } } } } } },
+      },
+    },
+    "/api/classes/teachers/{id}/classes/with-students": {
+      get: {
+        tags: ["Classes — Teacher"],
+        summary: "Classi di un insegnante con studenti (admin/principal)",
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" }, description: "ID insegnante" }],
+        responses: { 200: { description: "Lista classi con studenti", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/TeacherClass" } } } } } },
       },
     },
   },

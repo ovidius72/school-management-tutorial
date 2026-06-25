@@ -9,7 +9,7 @@ const router = Router();
 // 🔐 Tutte le route richiedono autenticazione
 router.use(authenticate);
 
-// ─── Miei voti (funziona per student, teacher, admin) ───
+// ─── Miei voti (funziona per student, teacher) ───
 // Dispatcher automatico in base al ruolo
 router.get("/my", (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const user = req.user!;
@@ -19,8 +19,8 @@ router.get("/my", (req: AuthenticatedRequest, res: Response, next: NextFunction)
   if (user.roles.includes("teacher")) {
     return ctrl.getTeacherGradesCtrl(req, res, next);
   }
-  // Admin: tutti i voti
-  return ctrl.list(req, res, next);
+  // Admin/Principal: "my grades" non applicabile, restituisce array vuoto
+  return res.json([]);
 });
 
 // Vista insegnante: voti inseriti

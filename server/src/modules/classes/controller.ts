@@ -93,3 +93,37 @@ export function getMyClass(req: AuthenticatedRequest, res: Response, next: NextF
     res.json(service.getStudentClass(req.user!.userId));
   } catch (err) { next(err); }
 }
+
+export function getMyClasses(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    res.json(service.getTeacherClasses(req.user!.userId));
+  } catch (err) { next(err); }
+}
+
+export function getMyClassesWithStudents(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    res.json(service.getTeacherClassesWithStudents(req.user!.userId));
+  } catch (err) { next(err); }
+}
+
+export function getTeacherClassesById(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const teacherId = paramId(req);
+    // Admin/principal can view any teacher's classes
+    // Teacher can only view their own
+    if (req.user!.roles.includes("teacher") && req.user!.userId !== teacherId) {
+      return next(new Error("Non autorizzato: puoi vedere solo le tue classi"));
+    }
+    res.json(service.getTeacherClasses(teacherId));
+  } catch (err) { next(err); }
+}
+
+export function getTeacherClassesWithStudentsById(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const teacherId = paramId(req);
+    if (req.user!.roles.includes("teacher") && req.user!.userId !== teacherId) {
+      return next(new Error("Non autorizzato: puoi vedere solo le tue classi"));
+    }
+    res.json(service.getTeacherClassesWithStudents(teacherId));
+  } catch (err) { next(err); }
+}

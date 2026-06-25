@@ -15,6 +15,14 @@ router.post("/", authorize("admin", "principal"), ctrl.create);
 router.put("/:id", authorize("admin", "principal"), ctrl.update);
 router.delete("/:id", authorize("admin"), ctrl.remove);
 
+// Teacher classes (authenticated teacher)
+router.get("/teacher/me", authorize("teacher"), ctrl.getMyClasses);
+router.get("/teacher/me/with-students", authorize("teacher"), ctrl.getMyClassesWithStudents);
+
+// Teacher classes by ID (admin/principal, or teacher for themselves)
+router.get("/teachers/:id/classes", authorize("admin", "principal", "teacher"), ctrl.getTeacherClassesById);
+router.get("/teachers/:id/classes/with-students", authorize("admin", "principal", "teacher"), ctrl.getTeacherClassesWithStudentsById);
+
 // Assegnazione insegnanti
 router.get("/:id/teachers", authorize("admin", "principal", "teacher"), ctrl.getTeacherAssignments);
 router.post("/:id/teachers", authorize("admin", "principal"), ctrl.assignTeacher);

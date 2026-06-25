@@ -20,4 +20,13 @@ router.post("/users", authenticate, authorize("admin", "principal"), ctrl.create
 router.put("/users/:id", authenticate, authorize("admin", "principal"), ctrl.updateUser);
 router.delete("/users/:id", authenticate, authorize("admin"), ctrl.deleteUser);
 
+// User Roles (admin/principal)
+router.get("/users/:id/roles", authenticate, authorize("admin", "principal"), ctrl.getUserRoles);
+router.put("/users/:id/roles", authenticate, authorize("admin", "principal"), ctrl.setUserRoles);
+router.post("/users/:id/roles", authenticate, authorize("admin", "principal"), ctrl.addUserRole);
+router.delete("/users/:id/roles/:role", authenticate, authorize("admin", "principal"), ctrl.removeUserRole);
+
+// User Effective Permissions (admin/principal)
+router.get("/users/:id/permissions", authenticate, authorize("admin", "principal"), ctrl.getUserPermissions);
+
 export default router;

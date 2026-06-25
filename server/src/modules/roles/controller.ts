@@ -4,6 +4,7 @@ import * as service from "./service";
 import { createRoleSchema, updateRoleSchema } from "./schema";
 import { ValidationError } from "../../utils/errors";
 import { paramId } from "../../utils/params";
+import { z } from "zod";
 
 export function list(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try { res.json(service.list()); } catch (err) { next(err); }
@@ -42,4 +43,33 @@ export function remove(req: AuthenticatedRequest, res: Response, next: NextFunct
 
 export function listPermissions(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try { res.json(service.listPermissions()); } catch (err) { next(err); }
+}
+
+const addRolePermissionSchema = z.object({
+  permissionId: z.number().int().positive(),
+});
+
+export function getRolePermissions(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try { res.json(service.getRolePermissions(paramId(req))); } catch (err) { next(err); }
+}
+
+export function addRolePermission(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const roleId = paramId(req);
+    const parsed = addRolePermissionSchema.parse(req.body);
+    const permissions = service.addRolePermission(roleId, parsed.permissionId);
+    res.json(permissions);
+  } catch (err) {
+    if (err instanceof Error && "issues" in (err as any)) return next(new ValidationError((err as any).issues));
+    next(err);
+  }
+}
+
+export function removeRolePermission(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const roleId = paramId(req);
+    const permissionId = Number(req.params.permissionId);
+    const permissions = service.removeRolePermission(roleId, permissionId);
+    res.json(permissions);
+  } catch (err) { next(err); }
 }

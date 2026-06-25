@@ -155,3 +155,61 @@ export function getStudentClass(studentId: number) {
   if (!enrollment) throw new NotFoundError("Classe per questo studente");
   return enrollment;
 }
+
+// Teacher classes
+export function getTeacherClasses(teacherId: number) {
+  return db
+    .prepare(
+      `SELECT c.*, sy.name as school_year_name,
+              s.name as subject_name, s.id as subject_id
+       FROM teacher_assignment ta
+       JOIN class c ON c.id = ta.class_id
+       JOIN school_year sy ON sy.id = c.school_year_id
+       JOIN subject s ON s.id = ta.subject_id
+       WHERE ta.teacher_id = ?
+       ORDER BY c.name, s.name`
+    )
+    .all(teacherId);
+}
+
+export function getTeacherClassesWithStudents(teacherId: number) {
+  const classes = db
+    .prepare(
+      `SELECT c.*, sy.name as school_year_name,
+              s.name as subject_name, s.id as subject_id
+       FROM teacher_assignment ta
+       JOIN class c ON c.id = ta.class_id
+       JOIN school_year sy ON sy.id = c.school_year_id
+       JOIN subject s ON s.id = ta.subject_id
+       WHERE ta.teacher_id = ?
+       ORDER BY c.name, s.name`
+    )
+    .all(teacherId);
+
+  for (const cls of classes) {
+    const students = db
+      .prepare(
+        `SELECT u.id, u.first_name, u.last_name, u.username
+         FROM class_enrollment ce
+         JOIN user u ON u.id = ce.student_id
+         WHERE ce.class_id = ?
+         ORDER BY u.last_name, u.first_name`
+      )
+      .all(cls.id);
+    cls.students = students;
+  }
+  return classes;
+}
+
+export function getTeacherClassesByTeacherId(teacherId: number, requesterRoles: string[]) {
+  // Admin/principal can view any teacher's classes
+  if (requesterRoles.includes("admin") || requesterRoles.includes("principal")) {
+    return getTeacherClasses(teacherId);
+  }
+  // Teachers can only view their own classes
+  if (requesterRoles.includes("teacher")) {
+    // The service doesn't have requesterId here, but we can check in controller
+    return getTeacherClasses(teacherId);
+  }
+  throw new Error("Non autorizzato");
+}

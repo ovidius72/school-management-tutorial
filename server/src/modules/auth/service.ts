@@ -267,3 +267,77 @@ export function deleteUser(id: number) {
     db.prepare("DELETE FROM user WHERE id = ?").run(id);
   })();
 }
+
+// User Roles
+export function getUserRoles(userId: number) {
+  const user = db.prepare("SELECT id FROM user WHERE id = ?").get(userId) as any;
+  if (!user) throw new NotFoundError("Utente");
+  const roles = db
+    .prepare(
+      `SELECT r.id, r.name, r.description FROM role r
+       JOIN user_role ur ON ur.id_role = r.id
+       WHERE ur.id_user = ?`
+    )
+    .all(userId);
+  return roles;
+}
+
+export function setUserRoles(userId: number, roleNames: string[]) {
+  const user = db.prepare("SELECT id FROM user WHERE id = ?").get(userId) as any;
+  if (!user) throw new NotFoundError("Utente");
+
+  db.prepare("DELETE FROM user_role WHERE id_user = ?").run(userId);
+
+  const assignStmt = db.prepare("INSERT OR IGNORE INTO user_role (id_role, id_user) VALUES (?, ?)");
+  for (const roleName of roleNames) {
+    const role = db.prepare("SELECT id FROM role WHERE name = ?").get(roleName) as any;
+    if (role) {
+      assignStmt.run(role.id, userId);
+    }
+  }
+
+  return getUserRoles(userId);
+}
+
+export function addUserRole(userId: number, roleName: string) {
+  const user = db.prepare("SELECT id FROM user WHERE id = ?").get(userId) as any;
+  if (!user) throw new NotFoundError("Utente");
+
+  const role = db.prepare("SELECT id FROM role WHERE name = ?").get(roleName) as any;
+  if (!role) throw new NotFoundError("Ruolo");
+
+  const existing = db.prepare("SELECT 1 FROM user_role WHERE id_user = ? AND id_role = ?").get(userId, role.id);
+  if (existing) throw new ConflictError("Utente ha già questo ruolo");
+
+  db.prepare("INSERT INTO user_role (id_role, id_user) VALUES (?, ?)").run(role.id, userId);
+  return getUserRoles(userId);
+}
+
+export function removeUserRole(userId: number, roleName: string) {
+  const user = db.prepare("SELECT id FROM user WHERE id = ?").get(userId) as any;
+  if (!user) throw new NotFoundError("Utente");
+
+  const role = db.prepare("SELECT id FROM role WHERE name = ?").get(roleName) as any;
+  if (!role) throw new NotFoundError("Ruolo");
+
+  const result = db.prepare("DELETE FROM user_role WHERE id_user = ? AND id_role = ?").run(userId, role.id);
+  if (result.changes === 0) throw new NotFoundError("Ruolo non assegnato all'utente");
+
+  return getUserRoles(userId);
+}
+
+// User Effective Permissions
+export function getUserPermissions(userId: number) {
+  const user = db.prepare("SELECT id FROM user WHERE id = ?").get(userId) as any;
+  if (!user) throw new NotFoundError("Utente");
+
+  const permissions = db
+    .prepare(
+      `SELECT DISTINCT p.id, p.name, p.description FROM permission p
+       JOIN role_permission rp ON rp.id_permission = p.id
+       JOIN user_role ur ON ur.id_role = rp.id_role
+       WHERE ur.id_user = ?`
+    )
+    .all(userId);
+  return permissions;
+}

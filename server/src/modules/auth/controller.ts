@@ -4,6 +4,7 @@ import * as authService from "./service";
 import { loginSchema, createUserSchema, updateUserSchema } from "./schema";
 import { ValidationError } from "../../utils/errors";
 import { paramId } from "../../utils/params";
+import { z } from "zod";
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -11,6 +12,14 @@ const REFRESH_COOKIE_OPTIONS = {
   path: "/api/auth",
   secure: process.env.NODE_ENV === "production",
 };
+
+const setUserRolesSchema = z.object({
+  roles: z.array(z.string().min(1)).min(1, "Almeno un ruolo richiesto"),
+});
+
+const addUserRoleSchema = z.object({
+  role: z.string().min(1, "Nome ruolo richiesto"),
+});
 
 export function login(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
@@ -146,6 +155,61 @@ export function deleteUser(req: AuthenticatedRequest, res: Response, next: NextF
     const id = paramId(req);
     authService.deleteUser(id);
     res.json({ message: "Utente eliminato" });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export function getUserRoles(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const id = paramId(req);
+    const roles = authService.getUserRoles(id);
+    res.json(roles);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export function setUserRoles(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const id = paramId(req);
+    const parsed = setUserRolesSchema.parse(req.body);
+    const roles = authService.setUserRoles(id, parsed.roles);
+    res.json(roles);
+  } catch (err) {
+    if (err instanceof Error && "issues" in (err as any)) return next(new ValidationError((err as any).issues));
+    next(err);
+  }
+}
+
+export function addUserRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const id = paramId(req);
+    const parsed = addUserRoleSchema.parse(req.body);
+    const roles = authService.addUserRole(id, parsed.role);
+    res.json(roles);
+  } catch (err) {
+    if (err instanceof Error && "issues" in (err as any)) return next(new ValidationError((err as any).issues));
+    next(err);
+  }
+}
+
+export function removeUserRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const id = paramId(req);
+    const role = req.params.role;
+    const roles = authService.removeUserRole(id, role);
+    res.json(roles);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export function getUserPermissions(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const id = paramId(req);
+    const permissions = authService.getUserPermissions(id);
+    res.json(permissions);
   } catch (err) {
     next(err);
   }

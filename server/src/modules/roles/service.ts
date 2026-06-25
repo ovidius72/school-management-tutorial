@@ -7,12 +7,12 @@ export function list() {
   return roles.map((r) => {
     const permissions = db
       .prepare(
-        `SELECT p.name FROM permission p
+        `SELECT p.id, p.name FROM permission p
          JOIN role_permission rp ON rp.id_permission = p.id
          WHERE rp.id_role = ?`
       )
       .all(r.id)
-      .map((p: any) => p.name);
+      .map((p: any) => ({ id: p.id, name: p.name }));
     return { ...r, permissions };
   });
 }
@@ -22,12 +22,12 @@ export function getById(id: number) {
   if (!role) throw new NotFoundError("Ruolo");
   const permissions = db
     .prepare(
-      `SELECT p.name FROM permission p
+      `SELECT p.id, p.name FROM permission p
        JOIN role_permission rp ON rp.id_permission = p.id
        WHERE rp.id_role = ?`
     )
     .all(id)
-    .map((p: any) => p.name);
+    .map((p: any) => ({ id: p.id, name: p.name }));
   return { ...role, permissions };
 }
 
@@ -42,9 +42,9 @@ export function create(input: CreateRoleInput) {
   const roleId = result.lastInsertRowid as number;
 
   if (input.permissions.length > 0) {
-    const stmt = db.prepare("INSERT OR IGNORE INTO role_permission (id_role, id_permission) VALUES (?, (SELECT id FROM permission WHERE name = ?))");
-    for (const perm of input.permissions) {
-      stmt.run(roleId, perm);
+    const stmt = db.prepare("INSERT OR IGNORE INTO role_permission (id_role, id_permission) VALUES (?, ?)");
+    for (const permId of input.permissions) {
+      stmt.run(roleId, permId);
     }
   }
 
@@ -72,9 +72,9 @@ export function update(id: number, input: UpdateRoleInput) {
 
   if (input.permissions) {
     db.prepare("DELETE FROM role_permission WHERE id_role = ?").run(id);
-    const stmt = db.prepare("INSERT OR IGNORE INTO role_permission (id_role, id_permission) VALUES (?, (SELECT id FROM permission WHERE name = ?))");
-    for (const perm of input.permissions) {
-      stmt.run(id, perm);
+    const stmt = db.prepare("INSERT OR IGNORE INTO role_permission (id_role, id_permission) VALUES (?, ?)");
+    for (const permId of input.permissions) {
+      stmt.run(id, permId);
     }
   }
 
@@ -102,4 +102,45 @@ export function createPermission(name: string, description?: string) {
     .prepare("INSERT INTO permission (name, description) VALUES (?, ?)")
     .run(name, description || null);
   return db.prepare("SELECT * FROM permission WHERE id = ?").get(result.lastInsertRowid);
+}
+
+// Role Permissions (granular)
+export function getRolePermissions(roleId: number) {
+  const role = db.prepare("SELECT id FROM role WHERE id = ?").get(roleId) as any;
+  if (!role) throw new NotFoundError("Ruolo");
+  return db
+    .prepare(
+      `SELECT p.id, p.name, p.description FROM permission p
+       JOIN role_permission rp ON rp.id_permission = p.id
+       WHERE rp.id_role = ?`
+    )
+    .all(roleId);
+}
+
+export function addRolePermission(roleId: number, permissionId: number) {
+  const role = db.prepare("SELECT id FROM role WHERE id = ?").get(roleId) as any;
+  if (!role) throw new NotFoundError("Ruolo");
+  const perm = db.prepare("SELECT id FROM permission WHERE id = ?").get(permissionId) as any;
+  if (!perm) throw new NotFoundError("Permesso");
+
+  try {
+    db.prepare("INSERT INTO role_permission (id_role, id_permission) VALUES (?, ?)").run(roleId, permissionId);
+  } catch (err: any) {
+    if (err?.code === "SQLITE_CONSTRAINT") throw new ConflictError("Ruolo ha già questo permesso");
+    throw err;
+  }
+
+  return getRolePermissions(roleId);
+}
+
+export function removeRolePermission(roleId: number, permissionId: number) {
+  const role = db.prepare("SELECT id FROM role WHERE id = ?").get(roleId) as any;
+  if (!role) throw new NotFoundError("Ruolo");
+  const perm = db.prepare("SELECT id FROM permission WHERE id = ?").get(permissionId) as any;
+  if (!perm) throw new NotFoundError("Permesso");
+
+  const result = db.prepare("DELETE FROM role_permission WHERE id_role = ? AND id_permission = ?").run(roleId, permissionId);
+  if (result.changes === 0) throw new NotFoundError("Permesso non assegnato al ruolo");
+
+  return getRolePermissions(roleId);
 }
